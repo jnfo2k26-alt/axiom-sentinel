@@ -236,7 +236,7 @@ const DEFAULTS = {
   timeLabels: [timeNow()],
   signalWeights: { rsi: 1.0, volume: 1.0, ema: 1.0, liquidity: 1.0 },
   signalsEnabled: { rsi: true, volume: true, ema: true, liquidity: true },
-  settings: { posSize: 15, slippage: 15, tp: 15, sl: 8, risk: 'balanced' },
+  settings: { posSize: 15, slippage: 15, tp: 15, sl: 5, risk: 'balanced' },
   achievements: [],
   rugAvoided: 0, tokensScanned: 0,
   scannerTokens: [],
@@ -417,7 +417,7 @@ function adaptToBalance() {
   // Adaptive risk: small balance = tighter SL to protect capital
   if (!S.learn) return;
   if (tradeable < 1) {
-    S.learn.dynamicSL = Math.min(S.learn.dynamicSL || S.settings.sl, 6);
+    S.learn.dynamicSL = Math.min(S.learn.dynamicSL || S.settings.sl, 5);
     S.learn.dynamicTP = Math.max(S.learn.dynamicTP || S.settings.tp, 12);
   }
 
@@ -973,9 +973,9 @@ async function updatePositions() {
     // Trailing stop: if price dropped significantly from peak after TP1
     else if (pos.trailingActive && highPnl > tp1Thresh) {
       const drawdown = highPnl - pnl;
-      // Trail at 40% of gains — if you gained 30% and dropped 12% from peak, close
-      const trailThreshold = highPnl * 0.4;
-      if (drawdown > trailThreshold && drawdown > 5) {
+      // Trail at 25% of gains — tighter trailing to protect profits
+      const trailThreshold = highPnl * 0.25;
+      if (drawdown > trailThreshold && drawdown > 3) {
         toClose.push({ pos, reason: 'Trail', pnl });
       }
     }
@@ -983,15 +983,13 @@ async function updatePositions() {
     else if (pnl <= -pos.sl) {
       toClose.push({ pos, reason: 'SL', pnl });
     }
-    // Time-based stagnation exit: if position hasn't moved much after 10+ minutes
-    else if (holdMinutes > 10 && Math.abs(pnl) < 2 && !pos.trailingActive) {
+    // Time-based stagnation exit: if position hasn't moved much after 5+ minutes
+    else if (holdMinutes > 5 && Math.abs(pnl) < 2 && !pos.trailingActive) {
       // Stagnating — free up capital for better opportunities
-      if (Math.random() > 0.7) {
-        toClose.push({ pos, reason: 'Stagnation', pnl });
-      }
+      toClose.push({ pos, reason: 'Stagnation', pnl });
     }
-    // Emergency exit: rapid dump detection (>15% drop in single tick)
-    else if (pnl < -pos.sl * 0.6 && pos.currentPrice < (pos.previousPrice || pos.currentPrice) * 0.96) {
+    // Emergency exit: rapid dump detection
+    else if (pnl < -pos.sl * 0.5 && pos.currentPrice < (pos.previousPrice || pos.currentPrice) * 0.97) {
       toClose.push({ pos, reason: 'Dump détecté', pnl });
     }
 
@@ -1211,10 +1209,10 @@ function autoTuneTPSL() {
   // If too many SL hits, widen SL slightly
   const slHits = recent.filter(h => h.reason === 'SL').length;
   if (slHits > recent.length * 0.5) {
-    L.dynamicSL = clamp(L.dynamicSL + 0.5, 5, 15);
+    L.dynamicSL = clamp(L.dynamicSL + 0.5, 3, 10);
     addLog('⚙', `Auto-ajustement: SL élargi à ${L.dynamicSL.toFixed(1)}% (trop de stops)`);
   } else if (slHits < recent.length * 0.15 && losses.length > 0) {
-    L.dynamicSL = clamp(L.dynamicSL - 0.3, 5, 15);
+    L.dynamicSL = clamp(L.dynamicSL - 0.3, 3, 10);
   }
 
   // If wins average is high, raise TP to let profits run

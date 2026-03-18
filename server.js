@@ -30,7 +30,7 @@ const DEFAULTS = {
   timeLabels: [new Date().toLocaleTimeString('fr-FR')],
   signalWeights: { rsi: 1.0, volume: 1.0, ema: 1.0, liquidity: 1.0 },
   signalsEnabled: { rsi: true, volume: true, ema: true, liquidity: true },
-  settings: { posSize: 15, slippage: 15, tp: 15, sl: 8, risk: 'balanced' },
+  settings: { posSize: 15, slippage: 15, tp: 15, sl: 5, risk: 'balanced' },
   achievements: [],
   rugAvoided: 0, tokensScanned: 0,
   scannerTokens: [],
@@ -292,8 +292,8 @@ function autoTuneTPSL() {
   const recent = S.history.slice(0, Math.min(50, S.history.length));
   if (recent.length < 5) return;
   const slHits = recent.filter(h => h.reason === 'SL').length;
-  if (slHits > recent.length * 0.5) L.dynamicSL = clamp(L.dynamicSL + 0.5, 5, 15);
-  else if (slHits < recent.length * 0.15) L.dynamicSL = clamp(L.dynamicSL - 0.3, 5, 15);
+  if (slHits > recent.length * 0.5) L.dynamicSL = clamp(L.dynamicSL + 0.5, 3, 10);
+  else if (slHits < recent.length * 0.15) L.dynamicSL = clamp(L.dynamicSL - 0.3, 3, 10);
   const wins = recent.filter(h => h.pnlPercent > 0);
   if (wins.length > 0) {
     const avgWin = wins.reduce((s, h) => s + h.pnlPercent, 0) / wins.length;
@@ -387,13 +387,13 @@ function updatePositions() {
     }
     else if (pos.trailingActive && highPnl > tp1T) {
       const drawdown = highPnl - pnl;
-      if (drawdown > Math.min(highPnl * 0.3, 10) && drawdown > 5) toClose.push({ pos, reason: 'Trail', pnl });
+      if (drawdown > Math.min(highPnl * 0.25, 8) && drawdown > 3) toClose.push({ pos, reason: 'Trail', pnl });
     }
     else if (pnl <= -pos.sl) { toClose.push({ pos, reason: 'SL', pnl }); }
-    else if (holdMin > 10 && Math.abs(pnl) < 2 && !pos.trailingActive) {
-      if ((pos.id + Math.floor(Date.now() / 60000)) % 3 === 0) toClose.push({ pos, reason: 'Stagnation', pnl });
+    else if (holdMin > 5 && Math.abs(pnl) < 2 && !pos.trailingActive) {
+      toClose.push({ pos, reason: 'Stagnation', pnl });
     }
-    else if (pnl < -pos.sl * 0.6 && pos.currentPrice < (pos.previousPrice || pos.currentPrice) * 0.96) {
+    else if (pnl < -pos.sl * 0.5 && pos.currentPrice < (pos.previousPrice || pos.currentPrice) * 0.97) {
       toClose.push({ pos, reason: 'Dump', pnl });
     }
     pos.previousPrice = pos.currentPrice;
